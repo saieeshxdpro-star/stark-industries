@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STARK INDUSTRIES / MARK VII INTERFACE</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyan: #00f3ff;
+            --cyan-glow: rgba(0, 243, 255, 0.4);
+            --crimson: #ff2a2a;
+            --gold: #ffd700;
+            --bg-glass: rgba(5, 12, 20, 0.75);
+            --border-glass: rgba(0, 243, 255, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #020508;
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--cyan);
+            cursor: none;
+        }
+
+        /* Custom Sci-Fi Cursor */
+        #cursor {
+            position: fixed;
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--cyan);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s, height: 0.2s, background-color 0.2s;
+            z-index: 10000;
+            box-shadow: 0 0 10px var(--cyan);
+        }
+        #cursor::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: var(--crimson);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+        }
+        body:hover #cursor { opacity: 1; }
+
+        /* Scanlines & Vignette Overlay */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 999;
+        }
+        .scanlines {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 6px 100%;
+        }
+        .vignette {
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 150px rgba(0,243,255,0.08);
+        }
+
+        /* Canvas Wrapper */
+        #webgl-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* HUD Header */
+        header {
+            position: absolute;
+            top: 20px; left: 30px; right: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            pointer-events: auto;
+        }
+        .brand {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: #fff;
+            text-shadow: 0 0 15px var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .brand span {
+            color: var(--crimson);
+            text-shadow: 0 0 15px var(--crimson);
+        }
+        .sys-status {
+            font-size: 0.9rem;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            padding: 8px 16px;
+            border-radius: 4px;
+            backdrop-filter: blur(8px);
+            display: flex;
+            gap: 20px;
+            box-shadow: 0 0 15px rgba(0,243,255,0.15);
+        }
+        .pulse-dot {
+            width: 10px; height: 10px;
+            background: var(--cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--cyan);
+            animation: pulseAnim 1.5s infinite;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        @keyframes pulseAnim {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 20px var(--cyan); }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+
+        /* Main UI Layout */
+        .hud-grid {
+            position: absolute;
+            top: 90px; left: 30px; right: 30px; bottom: 30px;
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            grid-template-rows: 1fr auto;
+            gap: 20px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .hud-panel {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 6px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .hud-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100px; height: 2px;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+        }
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #fff;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(0,243,255,0.2);
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Controls Panel (Left) */
+        .control-group {
+            margin-bottom: 15px;
+        }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            color: #aae5ff;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+            appearance: none;
+            height: 4px;
+            background: rgba(0,243,255,0.2);
+            border-radius: 2px;
+            outline: none;
+        }
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px; height: 12px;
+            background: var(--cyan);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--cyan);
+        }
+
+        /* Center Display Area (Empty spacer for WebGL view) */
+        .center-viewport-spacer {
+            pointer-events: none;
+        }
+
+        /* Telemetry & Lore Panels (Right) */
+        .telemetry-readouts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .tele-box {
+            background: rgba(0,243,255,0.04);
+            border: 1px solid rgba(0,243,255,0.15);
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .tele-box .val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            margin-top: 4px;
+            text-shadow: 0 0 8px var(--cyan);
+        }
+
+        /* Arsenal Cards */
+        .arsenal-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            max-height: 220px;
+            padding-right: 5px;
+        }
+        .arsenal-card {
+            background: rgba(0, 243, 255, 0.03);
+            border-left: 3px solid var(--cyan);
+            padding: 10px;
+            border-radius: 0 4px 4px 0;
+            font-size: 0.85rem;
+        }
+        .arsenal-card h4 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            color: #fff;
+            margin-bottom: 3px;
+        }
+
+        /* JARVIS Terminal (Bottom Spanning or Right Panel Footer) */
+        .terminal-box {
+            grid-column: 1 / -1;
+            height: 140px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 6px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.1);
+        }
+        .terminal-logs {
+            flex: 1;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: #aae5ff;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .terminal-input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .terminal-input-row span {
+            color: var(--crimson);
+            font-weight: bold;
+        }
+        .terminal-input-row input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        /* Audio Control Button */
+        .audio-toggle {
+            background: rgba(0,243,255,0.1);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0,243,255,0.2);
+        }
+        .audio-toggle:hover {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--cyan);
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: var(--cyan); border-radius: 2px; }
+
+        @media(max-width: 1024px) {
+            .hud-grid { grid-template-columns: 1fr; overflow-y: auto; position: static; margin: 20px; }
+            .center-viewport-spacer { display: none; }
+        }
+    </style>
+    <!-- Three.js Import Map -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+
+    <div id="cursor"></div>
+    <div class="overlay scanlines"></div>
+    <div class="overlay vignette"></div>
+
+    <div id="webgl-container"></div>
+
+    <!-- HUD Header -->
+    <header>
+        <div class="brand">
+            STARK INDUSTRIES <span>// MARK VII</span>
+        </div>
+        <div class="sys-status">
+            <div><span class="pulse-dot"></span>STATUS: <strong style="color:#fff;">ONLINE</strong></div>
+            <div>CORE: <strong style="color:var(--cyan);" id="core-status">99.8%</strong></div>
+            <button class="audio-toggle" id="audioBtn">AUDIO: OFF</button>
+        </div>
+    </header>
+
+    <!-- Main HUD Grid Controls & Lore -->
+    <div class="hud-grid">
+        <!-- Left Panel: Suit Configuration -->
+        <div class="hud-panel">
+            <div class="panel-title">ARMOR CALIBRATION</div>
+            
+            <div class="control-group">
+                <label><span>ARC REACTOR GLOW</span><strong id="val-glow">1.2</strong></label>
+                <input type="range" id="param-glow" min="0" max="2" step="0.1" value="1.2">
+            </div>
+
+            <div class="control-group">
+                <label><span>SUIT SCALE</span><strong id="val-scale">22</strong></label>
+                <input type="range" id="param-scale" min="10" max="40" step="1" value="22">
+            </div>
+
+            <div class="control-group">
+                <label><span>REACTOR PULSE</span><strong id="val-pulse">1.8</strong></label>
+                <input type="range" id="param-pulse" min="0" max="4" step="0.1" value="1.8">
+            </div>
+
+            <div class="control-group">
+                <label><span>PALM HEAT / REPULSOR</span><strong id="val-heat">0.8</strong></label>
+                <input type="range" id="param-heat" min="0" max="2" step="0.1" value="0.8">
+            </div>
+
+            <div class="control-group">
+                <label><span>WALK STRIDE FREQ</span><strong id="val-stride">0.6</strong></label>
+                <input type="range" id="param-stride" min="0" max="2" step="0.1" value="0.6">
+            </div>
+        </div>
+
+        <!-- Center Spacer -->
+        <div class="center-viewport-spacer"></div>
+
+        <!-- Right Panel: Telemetry & Stark Tech Arsenal -->
+        <div class="hud-panel">
+            <div class="panel-title">DIAGNOSTICS & LORE</div>
+            
+            <div class="telemetry-readouts">
+                <div class="tele-box">
+                    <div style="font-size:0.75rem; color:#aae5ff;">PARTICLE COUNT</div>
+                    <div class="val">20,000</div>
+                </div>
+                <div class="tele-box">
+                    <div style="font-size:0.75rem; color:#aae5ff;">SYSTEM HEAT</div>
+                    <div class="val" id="tele-heat">34.2°C</div>
+                </div>
+            </div>
+
+            <div class="panel-title" style="margin-top:5px; font-size:0.85rem;">STARK TECH ARSENAL</div>
+            <div class="arsenal-list">
+                <div class="arsenal-card">
+                    <h4>PARTICLE SWARM MESH</h4>
+                    <p>Dynamic instance grouping allowing rapid pod deployment and modular reassembly.</p>
+                </div>
+                <div class="arsenal-card">
+                    <h4>PALLADIUM-V CORE</h4>
+                    <p>High-density clean energy matrix generating continuous output for heavy repulsor bursts.</p>
+                </div>
+                <div class="arsenal-card">
+                    <h4>FLIGHT STABILIZERS</h4>
+                    <p>Micro-thruster arrays embedded across the dorsal chassis for supersonic stability.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Box spanning bottom -->
+        <div class="terminal-box">
+            <div class="panel-title" style="margin-bottom:8px;">J.A.R.V.I.S. INTERACTIVE TERMINAL</div>
+            <div class="terminal-logs" id="terminalLogs">
+                <div>[SYSTEM] J.A.R.V.I.S. online. Welcome back, Sir. Type 'help' for available protocol commands.</div>
+            </div>
+            <div class="terminal-input-row">
+                <span>STARK_CLI&gt;</span>
+                <input type="text" id="terminalInput" placeholder="Type command (e.g., status, protocol green, override, help)..." autocomplete="off">
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Application Logic -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Custom Cursor movement
+        const cursor = document.getElementById('cursor');
+        window.addEventListener('mousemove', (e) => {
+            cursor.style.left = `${e.clientX}px`;
+            cursor.style.top = `${e.clientY}px`;
+        });
+
+        // Audio Synthesis (Web Audio API)
+        let audioCtx = null;
+        let audioEnabled = false;
+        const audioBtn = document.getElementById('audioBtn');
+
+        audioBtn.addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            if (audioEnabled) {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                audioBtn.textContent = "AUDIO: ON";
+                playStartupHum();
+            } else {
+                audioBtn.textContent = "AUDIO: OFF";
+            }
+        });
+
+        function playStartupHum() {
+            if (!audioEnabled || !audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.8);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.8);
+        }
+
+        // CONFIG & PARAMS STATE
+        const PARAMS = {
+            glow: 1.2,
+            scale: 22,
+            pulse: 1.8,
+            heat: 0.8,
+            stride: 0.6
+        };
+
+        // Bind Sliders to DOM
+        Object.keys(PARAMS).forEach(key => {
+            const slider = document.getElementById(`param-${key}`);
+            const valDisplay = document.getElementById(`val-${key}`);
+            if (slider) {
+                slider.addEventListener('input', (e) => {
+                    PARAMS[key] = parseFloat(e.target.value);
+                    if (valDisplay) valDisplay.textContent = PARAMS[key];
+                    if (audioEnabled && audioCtx) {
+                        // Subtle tick sound on slider change
+                        const osc = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        osc.frequency.setValueAtTime(800 + Math.random() * 200, audioCtx.currentTime);
+                        g.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                        g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
+                        osc.connect(g); g.connect(audioCtx.destination);
+                        osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+                    }
+                });
+            }
+        });
+
+        // SETUP THREE.JS SCENE
+        const container = document.getElementById('webgl-container');
+        const COUNT = 20000;
+        const SPEED_MULT = 1;
+        const AUTO_SPIN = true;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.01);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+        camera.position.set(0, 0, 100);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = AUTO_SPIN;
+        controls.autoRotateSpeed = 1.5;
+        controls.enablePan = false;
+
+        // POST PROCESSING
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.strength = 1.8; bloomPass.radius = 0.4; bloomPass.threshold = 0;
+        composer.addPass(bloomPass);
+
+        // SWARM OBJECTS
+        const dummy = new THREE.Object3D();
+        const color = new THREE.Color();
+        const target = new THREE.Vector3();
+        
+        // INSTANCED MESH
+        const geometry = new THREE.TetrahedronGeometry(0.25);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        
+        const instancedMesh = new THREE.InstancedMesh(geometry, material, COUNT);
+        instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        scene.add(instancedMesh);
+
+        // DATA ARRAYS
+        const positions = [];
+        for(let i = 0; i < COUNT; i++) {
+            positions.push(new THREE.Vector3((Math.random()-0.5)*100, (Math.random()-0.5)*100, (Math.random()-0.5)*100));
+            instancedMesh.setColorAt(i, color.setHex(0x00ff88));
+        }
+
+        const addControl = (id, label, min, max, val) => {
+            return PARAMS[id] !== undefined ? PARAMS[id] : val;
+        };
+        const setInfo = (title, desc) => {};
+        const annotate = (id, pos, label) => {};
+
+        // TERMINAL COMMAND LOGIC
+        const terminalLogs = document.getElementById('terminalLogs');
+        const terminalInput = document.getElementById('terminalInput');
+
+        const appendLog = (text, isCommand = false) => {
+            const div = document.createElement('div');
+            div.style.color = isCommand ? '#fff' : '#aae5ff';
+            div.textContent = text;
+            terminalLogs.appendChild(div);
+            terminalLogs.scrollTop = terminalLogs.scrollHeight;
+        };
+
+        terminalInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const cmd = terminalInput.value.trim().toLowerCase();
+                if (!cmd) return;
+                appendLog(`> ${cmd}`, true);
+                terminalInput.value = '';
+
+                if (audioEnabled && audioCtx) {
+                    const osc = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                    g.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                    g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
+                    osc.connect(g); g.connect(audioCtx.destination);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+                }
+
+                setTimeout(() => {
+                    switch (cmd) {
+                        case 'help':
+                            appendLog("JARVIS: Available commands -> status, protocol green, override, clear, reinit");
+                            break;
+                        case 'status':
+                            appendLog("JARVIS: All Mark VII systems nominal. Arc reactor integrity at 99.8%. Particle swarm matrix stable.");
+                            break;
+                        case 'protocol green':
+                            appendLog("JARVIS: Initiating Protocol Green. Autonomous swarm defensive formations unlocked.");
+                            PARAMS.glow = 2.0; PARAMS.pulse = 3.0;
+                            document.getElementById('param-glow').value = 2.0;
+                            document.getElementById('val-glow').textContent = 2.0;
+                            break;
+                        case 'override':
+                            appendLog("JARVIS: Warning! Manual override engaged. Thermal limits elevated.");
+                            PARAMS.heat = 1.8;
+                            document.getElementById('param-heat').value = 1.8;
+                            document.getElementById('val-heat').textContent = 1.8;
+                            break;
+                        case 'clear':
+                            terminalLogs.innerHTML = '';
+                            break;
+                        case 'reinit':
+                            appendLog("JARVIS: Reinitializing WebGL context and telemetry arrays...");
+                            break;
+                        default:
+                            appendLog(`JARVIS: Command '${cmd}' not recognized in Stark OS v4.5. Type 'help'.`);
+                    }
+                }, 200);
+            }
+        });
+
+        // ANIMATION LOOP
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime() * SPEED_MULT;
+            
+            // Live Heat readout animation
+            document.getElementById('tele-heatshmi') || (document.getElementById('tele-heat').textContent = (34.0 + Math.sin(time * 2) * 1.5).toFixed(1) + '°C');
+
+            controls.update();
+
+            const count = COUNT;
+            for(let i = 0; i < COUNT; i++) {
+                 const coreCount = count * 0.06;
+                 const helmetCount = count * 0.12;
+                 const torsoCount = count * 0.45;
+                 const limbCount = count * 0.85;
+                 
+                 const glow = addControl("glow", "Arc Reactor Glow", 0, 2, 1.2);
+                 const scale = addControl("scale", "Suit Scale", 10, 40, 22);
+                 const pulse = addControl("pulse", "Reactor Pulse", 0, 4, 1.8);
+                 const heat = addControl("heat", "Palm Heat", 0, 2, 0.8);
+                 const stride = addControl("stride", "Walk Stride", 0, 2, 0.6);
+                 
+                 const gold = 2.399963;
+                 
+                 const s1 = Math.sin(i * 12.9898 + 1.0) * 43758.5453;
+                 const r1 = s1 - Math.floor(s1);
+                 const s2 = Math.sin(i * 78.233 + 2.0) * 24634.6345;
+                 const r2 = s2 - Math.floor(s2);
+                 const s3 = Math.sin(i * 39.425 + 3.0) * 15731.743;
+                 const r3 = s3 - Math.floor(s3);
+                 
+                 const walkPhase = Math.sin(time * stride * 1.5);
+                 
+                 if (i < coreCount) {
+                     const f = (i + 0.5) / Math.max(1, coreCount);
+                     const a = gold * i + time * pulse * 2.0;
+                     const rad = scale * 0.045 * (0.8 + 0.2 * Math.sin(time * pulse * 3.0));
+                     const yy = 1 - 2 * f;
+                     const rr = Math.sqrt(Math.max(0.0001, 1 - yy * yy));
+                     target.set(Math.cos(a) * rr * rad, scale * 0.55 + yy * rad, scale * 0.12 + Math.sin(a) * rr * rad * 0.5);
+                     const bright = 0.7 + 0.3 * Math.sin(time * pulse * 3.0);
+                     color.setHSL(0.55, 0.45, Math.max(0, Math.min(1, bright * glow)));
+                 } else if (i < helmetCount) {
+                     const f = (i - coreCount) / Math.max(1, helmetCount - coreCount);
+                     const yy = 1 - 2 * f;
+                     const rr = Math.sqrt(Math.max(0.0001, 1 - yy * yy));
+                     const a = gold * i;
+                     const rad = scale * 0.11;
+                     target.set(Math.cos(a) * rr * rad, scale * 0.95 + yy * rad * 0.9, Math.sin(a) * rr * rad * 0.7);
+                     const eyeBand = Math.abs(yy) < 0.15 ? 1 : 0;
+                     color.setHSL(eyeBand === 1 ? 0.5 : 0.05, eyeBand === 1 ? 0.6 : 0.85, eyeBand === 1 ? 0.65 : 0.4);
+                 } else if (i < torsoCount) {
+                     const f = (i - helmetCount) / Math.max(1, torsoCount - helmetCount);
+                     const yy = f;
+                     const torsoWidth = scale * 0.24 * (1.0 - 0.25 * Math.abs(yy - 0.5) * 2.0);
+                     const a = gold * i;
+                     const rr = Math.sqrt(Math.max(0.0001, r1));
+                     const x = Math.cos(a) * rr * torsoWidth;
+                     const z = Math.sin(a) * rr * torsoWidth * 0.55;
+                     target.set(x, scale * 0.85 - yy * scale * 0.6, z);
+                     const stripe = Math.sin(yy * 12.0 + a * 3.0) > 0.35 ? 1 : 0;
+                     color.setHSL(stripe === 1 ? 0.12 : 0.0, 0.85, stripe === 1 ? 0.55 : 0.4);
+                 } else if (i < limbCount) {
+                     const f = (i - torsoCount) / Math.max(1, limbCount - torsoCount);
+                     const limbSel = i % 4;
+                     const isArm = limbSel < 2;
+                     const side = (limbSel % 2 === 0) ? -1 : 1;
+                     const swing = walkPhase * (isArm ? -1 : 1) * side;
+                     const baseY = isArm ? scale * 0.75 : scale * 0.3;
+                     const length = isArm ? scale * 0.55 : scale * 0.75;
+                     const t = f;
+                     const swayX = swing * t * scale * 0.15;
+                     const x = side * (isArm ? scale * 0.28 : scale * 0.1) + swayX + (r2 - 0.5) * scale * 0.05;
+                     const y = baseY - t * length;
+                     const z = swing * t * scale * 0.1 + (r3 - 0.5) * scale * 0.04;
+                     target.set(x, y, z);
+                     const jointGlow = (isArm && t > 0.85) ? heat : 0.0;
+                     color.setHSL(0.05, 0.8, Math.max(0, Math.min(1, 0.35 + jointGlow * 0.5)));
+                 } else {
+                     const span = scale * 1.2;
+                     let by = r3 + time * 0.04;
+                     by = by - Math.floor(by);
+                     const trail = Math.pow(by, 1.6);
+                     const x = (r1 - 0.5) * span * 0.4;
+                     const y = -scale * 0.4 - trail * scale * 1.5 + Math.sin(time * 2.0 + r2 * 10.0) * 0.4;
+                     const z = (r2 - 0.5) * span * 0.4;
+                     target.set(x, y, z);
+                     const fade = Math.max(0, 1.0 - trail);
+                     color.setHSL(0.09, 0.9, Math.max(0, Math.min(1, 0.15 + 0.5 * fade * heat)));
+                 }
+
+                 positions[i].lerp(target, 0.1);
+                 dummy.position.copy(positions[i]);
+                 dummy.updateMatrix();
+                 instancedMesh.setMatrixAt(i, dummy.matrix);
+                 instancedMesh.setColorAt(i, color);
+            }
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.instanceColor.needsUpdate = true;
+
+            composer.render();
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
